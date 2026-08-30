@@ -1,345 +1,375 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
+
+	"api-students/app/model"
+	"api-students/app/repository"
 )
 
-// GET /api/v1/students - Daftar semua siswa dengan paginasi
-func GetStudents(c *fiber.Ctx) error {
-	var params QueryParams
+// ============================================================================
+// STUDENT HANDLER STRUCT
+// ============================================================================
 
-	// Parse query params dengan default values yang aman
-	params.Page, _ = strconv.Atoi(c.Query("page", "1"))
-	params.Limit, _ = strconv.Atoi(c.Query("limit", "10"))
-	params.Search = c.Query("search", "")
-	params.Sort = c.Query("sort", "")
-	params.Order = c.Query("order", "asc")
+type StudentHandler struct {
+	repo repository.StudentRepository
+}
 
-	// Parse min_grade
-	if minGrade := c.Query("min_grade"); minGrade != "" {
-		params.MinGrade, _ = strconv.Atoi(minGrade)
+func NewStudentHandler(repo repository.StudentRepository) *StudentHandler {
+	return &StudentHandler{repo: repo}
+}
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+func reqContext(c *fiber.Ctx) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(c.UserContext(), 5*time.Second)
+}
+
+func parseListQuery(c *fiber.Ctx) model.ListQuery {
+	page, _ := strconv.Atoi(c.Query("page", "1"))
+	limit, _ := strconv.Atoi(c.Query("limit", "10"))
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
 	}
 
-	// Parse max_grade
-	if maxGrade := c.Query("max_grade"); maxGrade != "" {
-		params.MaxGrade, _ = strconv.Atoi(maxGrade)
+	q := model.ListQuery{
+		Page:   page,
+		Limit:  limit,
+		Search: c.Query("search", ""),
+		Sort:   c.Query("sort", ""),
+		Order:  c.Query("order", "asc"),
 	}
 
-	// Parse is_active
 	if isActive := c.Query("is_active"); isActive != "" {
 		val := isActive == "true"
-		params.IsActive = &val
+		q.IsActive = &val
 	}
 
-	// Filter dan paginate
-	filtered := filterStudents(params)
-	paginated, meta := paginate(filtered, params.Page, params.Limit)
+	if minGrade := c.Query("min_grade"); minGrade != "" {
+		q.MinGrade, _ = strconv.Atoi(minGrade)
+	}
+	if maxGrade := c.Query("max_grade"); maxGrade != "" {
+		q.MaxGrade, _ = strconv.Atoi(maxGrade)
+	}
 
-	// Return response dengan envelope
-	return c.Status(fiber.StatusOK).JSON(ResponseEnvelope{
-		Success: true,
-		Message: "Students retrieved successfully",
-		Data:    paginated,
-		Meta:    &meta,
-	})
+	return q
 }
 
-// GET /api/v1/students/:id - Ambil satu siswa berdasarkan ID
-func GetStudent(c *fiber.Ctx) error {
-	// Parse ID dari parameter
+func parseID(c *fiber.Ctx) (int, bool) {
 	id, err := strconv.Atoi(c.Params("id"))
+	if err != nil || id <= 0 {
+		return 0, false
+	}
+	return id, true
+}
+
+func translateError(err error) (int, string) {
+	switch {
+	case errors.Is(err, repository.ErrNotFound):
+		return fiber.StatusNotFound, "data not found"
+	case errors.Is(err, repository.ErrDuplicate):
+		return fiber.StatusConflict, "NIM already exists"
+	default:
+		return fiber.StatusInternalServerError, "internal server error"
+	}
+}
+
+// ============================================================================
+// HANDLER METHODS
+// ============================================================================
+
+// List handles GET /api/v1/students
+func (h *StudentHandler) List(c *fiber.Ctx) error {
+	ctx, cancel := reqContext(c)
+	defer cancel()
+
+	q := parseListQuery(c)
+
+	students, total, err := h.repo.FindAll(ctx, q)
 	if err != nil {
-		// ID bukan angka -> 400 Bad Request
-		return c.Status(fiber.StatusBadRequest).JSON(ResponseEnvelope{
+		status, msg := translateError(err)
+		return c.Status(status).JSON(model.ResponseEnvelope{
 			Success: false,
-			Message: "Invalid ID format",
-			Errors:  "ID must be a number",
+			Message: msg,
 		})
 	}
 
-	// Cari siswa dengan ID tersebut
-	for _, s := range students {
-		if s.ID == id {
-			return c.Status(fiber.StatusOK).JSON(ResponseEnvelope{
-				Success: true,
-				Message: "Student found",
-				Data:    s,
-			})
-		}
+	totalPages := 0
+	if q.Limit > 0 {
+		totalPages = (total + q.Limit - 1) / q.Limit
 	}
 
-	// ID tidak ditemukan -> 404 Not Found
-	return c.Status(fiber.StatusNotFound).JSON(ResponseEnvelope{
-		Success: false,
-		Message: "Student not found",
+	return c.Status(fiber.StatusOK).JSON(model.ResponseEnvelope{
+		Success: true,
+		Message: "students retrieved successfully",
+		Data:    students,
+		Meta: &model.MetaData{
+			Page:       q.Page,
+			Limit:      q.Limit,
+			Total:      total,
+			TotalPages: totalPages,
+		},
 	})
 }
 
-// POST /api/v1/students - Tambah siswa baru
-func CreateStudent(c *fiber.Ctx) error {
-	var req CreateStudentRequest
+// Get handles GET /api/v1/students/:id
+func (h *StudentHandler) Get(c *fiber.Ctx) error {
+	ctx, cancel := reqContext(c)
+	defer cancel()
 
-	// Parse JSON body
+	id, ok := parseID(c)
+	if !ok {
+		return c.Status(fiber.StatusBadRequest).JSON(model.ResponseEnvelope{
+			Success: false,
+			Message: "invalid ID format",
+		})
+	}
+
+	student, err := h.repo.FindByID(ctx, id)
+	if err != nil {
+		status, msg := translateError(err)
+		return c.Status(status).JSON(model.ResponseEnvelope{
+			Success: false,
+			Message: msg,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(model.ResponseEnvelope{
+		Success: true,
+		Message: "student found",
+		Data:    student,
+	})
+}
+
+// Create handles POST /api/v1/students
+func (h *StudentHandler) Create(c *fiber.Ctx) error {
+	ctx, cancel := reqContext(c)
+	defer cancel()
+
+	var req model.CreateStudentRequest
 	if err := c.BodyParser(&req); err != nil {
-		// Body bukan JSON yang valid -> 400 Bad Request
-		return c.Status(fiber.StatusBadRequest).JSON(ResponseEnvelope{
+		return c.Status(fiber.StatusBadRequest).JSON(model.ResponseEnvelope{
 			Success: false,
-			Message: "Invalid JSON body",
-			Errors:  err.Error(),
+			Message: "invalid JSON body",
 		})
 	}
 
-	// Validasi: NIM required
+	req.NIM = strings.TrimSpace(req.NIM)
+	req.Name = strings.TrimSpace(req.Name)
+
+	errs := map[string]string{}
 	if req.NIM == "" {
-		return c.Status(fiber.StatusUnprocessableEntity).JSON(ResponseEnvelope{
-			Success: false,
-			Message: "Validation failed",
-			Errors:  map[string]string{"nim": "NIM is required"},
-		})
+		errs["nim"] = "NIM is required"
 	}
-
-	// Validasi: Name required
 	if req.Name == "" {
-		return c.Status(fiber.StatusUnprocessableEntity).JSON(ResponseEnvelope{
-			Success: false,
-			Message: "Validation failed",
-			Errors:  map[string]string{"name": "Name is required"},
-		})
+		errs["name"] = "name is required"
 	}
-
-	// Validasi: Grade antara 0-100
 	if req.Grade < 0 || req.Grade > 100 {
-		return c.Status(fiber.StatusUnprocessableEntity).JSON(ResponseEnvelope{
+		errs["grade"] = "grade must be between 0 and 100"
+	}
+
+	if len(errs) > 0 {
+		return c.Status(fiber.StatusUnprocessableEntity).JSON(model.ResponseEnvelope{
 			Success: false,
-			Message: "Validation failed",
-			Errors:  map[string]string{"grade": "Grade must be between 0 and 100"},
+			Message: "validation failed",
+			Errors:  errs,
 		})
 	}
 
-	// Cek duplikat NIM -> 409 Conflict
-	if !isNIMUnique(req.NIM, 0) {
-		return c.Status(fiber.StatusConflict).JSON(ResponseEnvelope{
-			Success: false,
-			Message: "NIM already exists",
-			Errors:  map[string]string{"nim": "Duplicate NIM"},
-		})
-	}
-
-	// Buat siswa baru
-	lastID++
-	student := Student{
-		ID:       lastID,
+	student := model.Student{
 		NIM:      req.NIM,
 		Name:     req.Name,
 		Grade:    req.Grade,
 		IsActive: req.IsActive,
 	}
-	students = append(students, student)
 
-	// Set Location header (201 Created)
-	c.Set("Location", "/api/v1/students/"+strconv.Itoa(student.ID))
+	created, err := h.repo.Create(ctx, student)
+	if err != nil {
+		status, msg := translateError(err)
+		return c.Status(status).JSON(model.ResponseEnvelope{
+			Success: false,
+			Message: msg,
+		})
+	}
 
-	// Return 201 Created
-	return c.Status(fiber.StatusCreated).JSON(ResponseEnvelope{
+	c.Set("Location", "/api/v1/students/"+strconv.Itoa(created.ID))
+
+	return c.Status(fiber.StatusCreated).JSON(model.ResponseEnvelope{
 		Success: true,
-		Message: "Student created successfully",
-		Data:    student,
+		Message: "student created successfully",
+		Data:    created,
 	})
 }
 
-// PUT /api/v1/students/:id - Update seluruh data siswa
-func UpdateStudent(c *fiber.Ctx) error {
-	// Parse ID
-	id, err := strconv.Atoi(c.Params("id"))
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(ResponseEnvelope{
+// Replace handles PUT /api/v1/students/:id
+func (h *StudentHandler) Replace(c *fiber.Ctx) error {
+	ctx, cancel := reqContext(c)
+	defer cancel()
+
+	id, ok := parseID(c)
+	if !ok {
+		return c.Status(fiber.StatusBadRequest).JSON(model.ResponseEnvelope{
 			Success: false,
-			Message: "Invalid ID format",
-			Errors:  "ID must be a number",
+			Message: "invalid ID format",
 		})
 	}
 
-	var req UpdateStudentRequest
-
-	// Parse JSON body
+	var req model.UpdateStudentRequest
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(ResponseEnvelope{
+		return c.Status(fiber.StatusBadRequest).JSON(model.ResponseEnvelope{
 			Success: false,
-			Message: "Invalid JSON body",
-			Errors:  err.Error(),
+			Message: "invalid JSON body",
 		})
 	}
 
-	// Validasi: semua field wajib diisi (PUT)
+	req.NIM = strings.TrimSpace(req.NIM)
+	req.Name = strings.TrimSpace(req.Name)
+
+	errs := map[string]string{}
 	if req.NIM == "" {
-		return c.Status(fiber.StatusUnprocessableEntity).JSON(ResponseEnvelope{
-			Success: false,
-			Message: "Validation failed",
-			Errors:  map[string]string{"nim": "NIM is required"},
-		})
+		errs["nim"] = "NIM is required"
 	}
 	if req.Name == "" {
-		return c.Status(fiber.StatusUnprocessableEntity).JSON(ResponseEnvelope{
-			Success: false,
-			Message: "Validation failed",
-			Errors:  map[string]string{"name": "Name is required"},
-		})
+		errs["name"] = "name is required"
 	}
 	if req.Grade < 0 || req.Grade > 100 {
-		return c.Status(fiber.StatusUnprocessableEntity).JSON(ResponseEnvelope{
+		errs["grade"] = "grade must be between 0 and 100"
+	}
+
+	if len(errs) > 0 {
+		return c.Status(fiber.StatusUnprocessableEntity).JSON(model.ResponseEnvelope{
 			Success: false,
-			Message: "Validation failed",
-			Errors:  map[string]string{"grade": "Grade must be between 0 and 100"},
+			Message: "validation failed",
+			Errors:  errs,
 		})
 	}
 
-	// Cari dan update siswa
-	found := false
-	for i, s := range students {
-		if s.ID == id {
-			// Cek duplikat NIM (exclude current)
-			if !isNIMUnique(req.NIM, id) {
-				return c.Status(fiber.StatusConflict).JSON(ResponseEnvelope{
-					Success: false,
-					Message: "NIM already exists",
-					Errors:  map[string]string{"nim": "Duplicate NIM"},
-				})
-			}
-
-			// Update semua field
-			students[i].NIM = req.NIM
-			students[i].Name = req.Name
-			students[i].Grade = req.Grade
-			students[i].IsActive = req.IsActive
-			found = true
-			break
-		}
+	student := model.Student{
+		ID:       id,
+		NIM:      req.NIM,
+		Name:     req.Name,
+		Grade:    req.Grade,
+		IsActive: req.IsActive,
 	}
 
-	if !found {
-		return c.Status(fiber.StatusNotFound).JSON(ResponseEnvelope{
+	updated, err := h.repo.Update(ctx, student)
+	if err != nil {
+		status, msg := translateError(err)
+		return c.Status(status).JSON(model.ResponseEnvelope{
 			Success: false,
-			Message: "Student not found",
+			Message: msg,
 		})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(ResponseEnvelope{
+	return c.Status(fiber.StatusOK).JSON(model.ResponseEnvelope{
 		Success: true,
-		Message: "Student updated successfully",
-		Data:    students,
+		Message: "student updated successfully",
+		Data:    updated,
 	})
 }
 
-// PATCH /api/v1/students/:id - Update sebagian data siswa
-func PatchStudent(c *fiber.Ctx) error {
-	// Parse ID
-	id, err := strconv.Atoi(c.Params("id"))
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(ResponseEnvelope{
+// Patch handles PATCH /api/v1/students/:id
+func (h *StudentHandler) Patch(c *fiber.Ctx) error {
+	ctx, cancel := reqContext(c)
+	defer cancel()
+
+	id, ok := parseID(c)
+	if !ok {
+		return c.Status(fiber.StatusBadRequest).JSON(model.ResponseEnvelope{
 			Success: false,
-			Message: "Invalid ID format",
-			Errors:  "ID must be a number",
+			Message: "invalid ID format",
 		})
 	}
 
-	var req PatchStudentRequest
-
-	// Parse JSON body
+	var req model.PatchStudentRequest
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(ResponseEnvelope{
+		return c.Status(fiber.StatusBadRequest).JSON(model.ResponseEnvelope{
 			Success: false,
-			Message: "Invalid JSON body",
-			Errors:  err.Error(),
+			Message: "invalid JSON body",
 		})
 	}
 
-	// Cari siswa
-	var studentIndex int
-	found := false
-	for i, s := range students {
-		if s.ID == id {
-			studentIndex = i
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		return c.Status(fiber.StatusNotFound).JSON(ResponseEnvelope{
+	existing, err := h.repo.FindByID(ctx, id)
+	if err != nil {
+		status, msg := translateError(err)
+		return c.Status(status).JSON(model.ResponseEnvelope{
 			Success: false,
-			Message: "Student not found",
+			Message: msg,
 		})
 	}
 
-	// Update hanya field yang dikirim (PATCH)
 	if req.NIM != nil {
-		if !isNIMUnique(*req.NIM, id) {
-			return c.Status(fiber.StatusConflict).JSON(ResponseEnvelope{
-				Success: false,
-				Message: "NIM already exists",
-				Errors:  map[string]string{"nim": "Duplicate NIM"},
-			})
-		}
-		students[studentIndex].NIM = *req.NIM
+		existing.NIM = *req.NIM
 	}
-
 	if req.Name != nil {
-		students[studentIndex].Name = *req.Name
+		existing.Name = *req.Name
 	}
-
 	if req.Grade != nil {
 		if *req.Grade < 0 || *req.Grade > 100 {
-			return c.Status(fiber.StatusUnprocessableEntity).JSON(ResponseEnvelope{
+			return c.Status(fiber.StatusUnprocessableEntity).JSON(model.ResponseEnvelope{
 				Success: false,
-				Message: "Validation failed",
-				Errors:  map[string]string{"grade": "Grade must be between 0 and 100"},
+				Message: "validation failed",
+				Errors:  map[string]string{"grade": "grade must be between 0 and 100"},
 			})
 		}
-		students[studentIndex].Grade = *req.Grade
+		existing.Grade = *req.Grade
 	}
-
 	if req.IsActive != nil {
-		students[studentIndex].IsActive = *req.IsActive
+		existing.IsActive = *req.IsActive
 	}
 
-	return c.Status(fiber.StatusOK).JSON(ResponseEnvelope{
+	updated, err := h.repo.Update(ctx, existing)
+	if err != nil {
+		status, msg := translateError(err)
+		return c.Status(status).JSON(model.ResponseEnvelope{
+			Success: false,
+			Message: msg,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(model.ResponseEnvelope{
 		Success: true,
-		Message: "Student patched successfully",
-		Data:    students[studentIndex],
+		Message: "student patched successfully",
+		Data:    updated,
 	})
 }
 
-// DELETE /api/v1/students/:id - Hapus siswa
-func DeleteStudent(c *fiber.Ctx) error {
-	// Parse ID
-	id, err := strconv.Atoi(c.Params("id"))
+// Delete handles DELETE /api/v1/students/:id
+func (h *StudentHandler) Delete(c *fiber.Ctx) error {
+	ctx, cancel := reqContext(c)
+	defer cancel()
+
+	id, ok := parseID(c)
+	if !ok {
+		return c.Status(fiber.StatusBadRequest).JSON(model.ResponseEnvelope{
+			Success: false,
+			Message: "invalid ID format",
+		})
+	}
+
+	err := h.repo.Delete(ctx, id)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(ResponseEnvelope{
+		status, msg := translateError(err)
+		return c.Status(status).JSON(model.ResponseEnvelope{
 			Success: false,
-			Message: "Invalid ID format",
-			Errors:  "ID must be a number",
+			Message: msg,
 		})
 	}
 
-	// Cari dan hapus siswa
-	found := false
-	for i, s := range students {
-		if s.ID == id {
-			students = append(students[:i], students[i+1:]...)
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		return c.Status(fiber.StatusNotFound).JSON(ResponseEnvelope{
-			Success: false,
-			Message: "Student not found",
-		})
-	}
-
-	// 204 No Content (tanpa body)
 	return c.Status(fiber.StatusNoContent).JSON(nil)
 }
