@@ -2,80 +2,64 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/gofiber/fiber/v2/middleware/recover"
-
-	"api-students/app/database"
-	"api-students/app/model"
 	"api-students/app/repository"
+	"api-students/app/service"
 	"api-students/config"
+	"api-students/database"
 )
 
 func main() {
-	// Load environment variables
+	// 1. Load env
 	config.LoadEnv()
 
-	// Connect to database
+	// 2. Logger
+	logger := config.NewLogger()
+
+	// 3. Database
 	ctx := context.Background()
 	pool, err := database.NewPool(ctx)
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		logger.Error("failed to connect to database", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 	defer pool.Close()
 
-	// Init Fiber
-	app := fiber.New(fiber.Config{
-		ErrorHandler: func(c *fiber.Ctx, err error) error {
-			return c.Status(fiber.StatusUnsupportedMediaType).JSON(model.ResponseEnvelope{
-				Success: false,
-				Message: "Content-Type must be application/json",
-			})
-		},
-	})
-
-	// Middleware
-	app.Use(logger.New())
-	app.Use(recover.New())
-
-	// Init Repository & Handler
+	// 4. Repository -> Service (perakitan dari dalam ke luar)
 	studentRepo := repository.NewStudentRepository(pool)
-	studentHandler := NewStudentHandler(studentRepo)
+	studentService := service.NewStudentService(studentRepo)
 
-	// API Routes
-	api := app.Group("/api/v1")
+	// 5. App (perakitan aplikasi)
+	app := config.NewApp(pool, studentService)
 
-	// Health check
-	api.Get("/health", func(c *fiber.Ctx) error {
-		ctx, cancel := context.WithTimeout(c.UserContext(), 2*time.Second)
-		defer cancel()
-
-		if err := pool.Ping(ctx); err != nil {
-			return c.Status(fiber.StatusServiceUnavailable).JSON(model.ResponseEnvelope{
-				Success: false,
-				Message: "database is unavailable",
-			})
-		}
-
-		return c.Status(fiber.StatusOK).JSON(model.ResponseEnvelope{
-			Success: true,
-			Message: "server and database are running",
-		})
-	})
-
-	// Student routes - using StudentHandler
-	api.Get("/students", studentHandler.List)
-	api.Get("/students/:id", studentHandler.Get)
-	api.Post("/students", studentHandler.Create)
-	api.Put("/students/:id", studentHandler.Replace)
-	api.Patch("/students/:id", studentHandler.Patch)
-	api.Delete("/students/:id", studentHandler.Delete)
-
-	// Start server
+	// 6. Run server
 	port := config.GetEnv("APP_PORT", "3000")
-	log.Printf("server running on port %s", port)
-	log.Fatal(app.Listen(":" + port))
+	go func() {
+		if err := app.Listen(":" + port); err != nil {
+			logger.Error("server stopped", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+	}()
+
+	logger.Info("server running", slog.String("port", port))
+
+	// 7. Graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	logger.Info("shutting down server...")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := app.ShutdownWithContext(ctx); err != nil {
+		logger.Error("shutdown error", slog.String("error", err.Error()))
+	}
+
+	logger.Info("server stopped gracefully")
 }
