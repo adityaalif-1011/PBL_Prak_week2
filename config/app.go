@@ -10,8 +10,11 @@ import (
 	"api-students/route"
 )
 
-// NewApp merakit aplikasi
-func NewApp(pool *pgxpool.Pool, studentService *service.StudentService) *fiber.App {
+func NewApp(
+	pool *pgxpool.Pool,
+	studentService *service.StudentService,
+	achievementService *service.AchievementService, // ← TAMBAH INI
+) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName: GetEnv("APP_NAME", "API Students"),
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
@@ -19,13 +22,9 @@ func NewApp(pool *pgxpool.Pool, studentService *service.StudentService) *fiber.A
 		},
 	})
 
-	// Middleware global
 	middleware.Register(app)
+	route.Register(app, pool, studentService, achievementService) // ← UBAH JADI 4 ARGUMEN
 
-	// Route
-	route.Register(app, pool, studentService)
-
-	// 404 handler
 	app.Use(func(c *fiber.Ctx) error {
 		return helper.Fail(c, fiber.StatusNotFound, "endpoint not found")
 	})

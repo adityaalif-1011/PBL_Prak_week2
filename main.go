@@ -30,14 +30,18 @@ func main() {
 	}
 	defer pool.Close()
 
-	// 4. Repository -> Service (perakitan dari dalam ke luar)
+	// 4. Repository
 	studentRepo := repository.NewStudentRepository(pool)
+	achievementRepo := repository.NewAchievementRepository(pool) // ← TAMBAH
+
+	// 5. Service
 	studentService := service.NewStudentService(studentRepo)
+	achievementService := service.NewAchievementService(achievementRepo, studentRepo) // ← TAMBAH
 
-	// 5. App (perakitan aplikasi)
-	app := config.NewApp(pool, studentService)
+	// 6. App (perakitan aplikasi)
+	app := config.NewApp(pool, studentService, achievementService) // ← TAMBAH achievementService
 
-	// 6. Run server
+	// 7. Run server
 	port := config.GetEnv("APP_PORT", "3000")
 	go func() {
 		if err := app.Listen(":" + port); err != nil {
@@ -48,7 +52,7 @@ func main() {
 
 	logger.Info("server running", slog.String("port", port))
 
-	// 7. Graceful shutdown
+	// 8. Graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit

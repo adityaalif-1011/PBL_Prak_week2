@@ -15,8 +15,8 @@ import (
 
 // Sentinel errors 
 var (
-	ErrNotFound  = errors.New("data not found")
 	ErrDuplicate = errors.New("duplicate data")
+	ErrNotFound  = errors.New("student not found")
 )
 
 // StudentRepository adalah KONTAK penyimpanan data student
