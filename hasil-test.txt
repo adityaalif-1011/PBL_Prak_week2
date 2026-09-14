@@ -1,0 +1,204 @@
+==========================================
+  TEST AUTHENTICATION - SEMUA ENDPOINT
+==========================================
+
+=== 1. REGISTER USER BARU ===
+HTTP/1.1 409 Conflict
+Date: Sun, 13 Sep 2026 13:20:13 GMT
+Content-Type: application/json
+Content-Length: 63
+X-Request-Id: d1e63560-3269-4303-852e-5d8b33411f77
+X-Xss-Protection: 0
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Resource-Policy: same-origin
+Origin-Agent-Cluster: ?1
+Referrer-Policy: no-referrer
+X-Dns-Prefetch-Control: off
+X-Download-Options: noopen
+X-Permitted-Cross-Domain-Policies: none
+
+{"success":false,"message":"username atau email sudah dipakai"}
+
+=== 2. REGISTER PASSWORD LEMAH (harus 422) ===
+HTTP/1.1 422 Unprocessable Entity
+Date: Sun, 13 Sep 2026 13:20:13 GMT
+Content-Type: application/json
+Content-Length: 93
+X-Request-Id: d2e63560-3269-4303-852e-5d8b33411f77
+X-Xss-Protection: 0
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Resource-Policy: same-origin
+Origin-Agent-Cluster: ?1
+Referrer-Policy: no-referrer
+X-Dns-Prefetch-Control: off
+X-Download-Options: noopen
+X-Permitted-Cross-Domain-Policies: none
+
+{"success":false,"message":"validation failed","errors":{"password":"password terlalu umum"}}
+
+=== 3. LOGIN PASSWORD SALAH (harus 401) ===
+HTTP/1.1 429 Too Many Requests
+Date: Sun, 13 Sep 2026 13:20:13 GMT
+Content-Type: application/json
+Content-Length: 88
+X-Request-Id: d3e63560-3269-4303-852e-5d8b33411f77
+X-Xss-Protection: 0
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Resource-Policy: same-origin
+Origin-Agent-Cluster: ?1
+Referrer-Policy: no-referrer
+X-Dns-Prefetch-Control: off
+X-Download-Options: noopen
+X-Permitted-Cross-Domain-Policies: none
+Retry-After: 60
+
+{"success":false,"message":"terlalu banyak percobaan login, coba lagi dalam satu menit"}
+
+=== 4. LOGIN USERNAME TIDAK ADA (harus 401, pesan sama) ===
+HTTP/1.1 429 Too Many Requests
+Date: Sun, 13 Sep 2026 13:20:13 GMT
+Content-Type: application/json
+Content-Length: 88
+X-Request-Id: d4e63560-3269-4303-852e-5d8b33411f77
+X-Xss-Protection: 0
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Resource-Policy: same-origin
+Origin-Agent-Cluster: ?1
+Referrer-Policy: no-referrer
+X-Dns-Prefetch-Control: off
+X-Download-Options: noopen
+X-Permitted-Cross-Domain-Policies: none
+Retry-After: 60
+
+{"success":false,"message":"terlalu banyak percobaan login, coba lagi dalam satu menit"}
+
+=== 5. LOGIN BENAR (harus 200) ===
+{"success":false,"message":"terlalu banyak percobaan login, coba lagi dalam satu menit"}
+
+
+
+=== 6. AKSES /students TANPA TOKEN (harus 401) ===
+HTTP/1.1 401 Unauthorized
+Date: Sun, 13 Sep 2026 13:20:13 GMT
+Content-Type: application/json
+Content-Length: 78
+X-Request-Id: d6e63560-3269-4303-852e-5d8b33411f77
+X-Xss-Protection: 0
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Opener-Policy: same-origin
+
+
+=== 7. AKSES /students DENGAN TOKEN (harus 200) ===
+HTTP/1.1 401 Unauthorized
+Date: Sun, 13 Sep 2026 13:20:13 GMT
+Content-Type: application/json
+Content-Length: 78
+X-Request-Id: d7e63560-3269-4303-852e-5d8b33411f77
+X-Xss-Protection: 0
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Opener-Policy: same-origin
+
+
+=== 8. AKSES /auth/me DENGAN TOKEN (harus 200) ===
+HTTP/1.1 401 Unauthorized
+Date: Sun, 13 Sep 2026 13:20:13 GMT
+Content-Type: application/json
+Content-Length: 78
+X-Request-Id: d8e63560-3269-4303-852e-5d8b33411f77
+X-Xss-Protection: 0
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Resource-Policy: same-origin
+Origin-Agent-Cluster: ?1
+Referrer-Policy: no-referrer
+X-Dns-Prefetch-Control: off
+X-Download-Options: noopen
+X-Permitted-Cross-Domain-Policies: none
+Www-Authenticate: Bearer realm="api"
+
+{"success":false,"message":"header Authorization tidak ada atau salah bentuk"}
+
+=== 9. TOKEN DIUBAH 1 KARAKTER (harus 401) ===
+HTTP/1.1 401 Unauthorized
+Date: Sun, 13 Sep 2026 13:20:13 GMT
+Content-Type: application/json
+Content-Length: 54
+X-Request-Id: d9e63560-3269-4303-852e-5d8b33411f77
+X-Xss-Protection: 0
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Opener-Policy: same-origin
+
+
+=== 10. REFRESH TOKEN (harus 200) ===
+{"success":false,"message":"refresh_token wajib diisi"}
+
+
+=== 11. REFRESH PAKAI TOKEN LAMA (harus 401) ===
+HTTP/1.1 400 Bad Request
+Date: Sun, 13 Sep 2026 13:20:13 GMT
+Content-Type: application/json
+Content-Length: 55
+X-Request-Id: dbe63560-3269-4303-852e-5d8b33411f77
+X-Xss-Protection: 0
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Opener-Policy: same-origin
+
+
+=== 12. LOGOUT (harus 200) ===
+HTTP/1.1 200 OK
+Date: Sun, 13 Sep 2026 13:20:13 GMT
+Content-Type: application/json
+Content-Length: 44
+X-Request-Id: dce63560-3269-4303-852e-5d8b33411f77
+X-Xss-Protection: 0
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Opener-Policy: same-origin
+
+
+=== 13. BRUTE FORCE 6 KALI (harus 429 di ke-6) ===
+Percobaan ke-1: 429
+Percobaan ke-2: 429
+Percobaan ke-3: 429
+Percobaan ke-4: 429
+Percobaan ke-5: 429
+Percobaan ke-6: 429
+
+
+=== 14. MASS ASSIGNMENT (role admin harus tetap jadi user) ===
+{"success":false,"message":"username atau email sudah dipakai"}
+
+Cek DB:
+ username | role 
+----------+------
+ hacker   | user
+(1 row)
+
+
+
+==========================================
+  SELESAI! Screenshot hasil di atas.
+==========================================

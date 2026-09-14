@@ -12,36 +12,64 @@ import (
 	"api-students/app/service"
 	"api-students/config"
 	"api-students/database"
+	"api-students/helper"
+	"api-students/route"
 )
 
-func main() {
-	// 1. Load env
-	config.LoadEnv()
+const minSecretLength = 32
 
-	// 2. Logger
+func main() {
+	config.LoadEnv()
 	logger := config.NewLogger()
 
-	// 3. Database
-	ctx := context.Background()
-	pool, err := database.NewPool(ctx)
+	// Cek JWT_SECRET
+	jwtSecret := config.GetEnv("JWT_SECRET", "")
+	if len(jwtSecret) < minSecretLength {
+		logger.Error("JWT_SECRET tidak diisi atau terlalu pendek",
+			slog.Int("minimal_karakter", minSecretLength))
+		os.Exit(1)
+	}
+
+	// Database
+	pool, err := database.NewPool(context.Background())
 	if err != nil {
-		logger.Error("failed to connect to database", slog.String("error", err.Error()))
+		logger.Error("gagal terhubung ke database", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 	defer pool.Close()
 
-	// 4. Repository
+	// JWT Manager
+	jwtManager := helper.NewJWTManager(
+		jwtSecret,
+		config.GetEnv("JWT_ISSUER", "praktikum-backend"),
+		time.Duration(config.GetEnvInt("JWT_ACCESS_TTL_MINUTES", 15))*time.Minute,
+	)
+
+	// Repository
 	studentRepo := repository.NewStudentRepository(pool)
-	achievementRepo := repository.NewAchievementRepository(pool) // ← TAMBAH
+	achievementRepo := repository.NewAchievementRepository(pool)
+	userRepo := repository.NewUserRepository(pool)
+	tokenRepo := repository.NewTokenRepository(pool)
 
-	// 5. Service
+	// Service
 	studentService := service.NewStudentService(studentRepo)
-	achievementService := service.NewAchievementService(achievementRepo, studentRepo) // ← TAMBAH
+	achievementService := service.NewAchievementService(achievementRepo, studentRepo)
+	authService := service.NewAuthService(
+		userRepo,
+		tokenRepo,
+		jwtManager,
+		time.Duration(config.GetEnvInt("JWT_REFRESH_TTL_DAYS", 7))*24*time.Hour,
+	)
 
-	// 6. App (perakitan aplikasi)
-	app := config.NewApp(pool, studentService, achievementService) // ← TAMBAH achievementService
+	// App
+	app := config.NewApp(pool, route.Dependencies{
+		Pool:               pool,
+		JWT:                jwtManager,
+		StudentService:     studentService,
+		AchievementService: achievementService,
+		AuthService:        authService,
+	})
 
-	// 7. Run server
 	port := config.GetEnv("APP_PORT", "3000")
 	go func() {
 		if err := app.Listen(":" + port); err != nil {
@@ -52,7 +80,6 @@ func main() {
 
 	logger.Info("server running", slog.String("port", port))
 
-	// 8. Graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit

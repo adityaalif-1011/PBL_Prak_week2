@@ -1,2 +1,12 @@
 {"time":"2026-09-07T08:29:33.490419+07:00","level":"INFO","msg":"server running","port":"3000"}
 {"time":"2026-09-13T18:58:43.66979+07:00","level":"INFO","msg":"server running","port":"3000"}
+{"time":"2026-09-13T20:11:17.033348+07:00","level":"INFO","msg":"server running","port":"3000"}
+{"time":"2026-09-13T20:11:17.033436+07:00","level":"ERROR","msg":"server stopped","error":"failed to listen: listen tcp4 :3000: bind: address already in use"}
+{"time":"2026-09-13T20:11:24.957193+07:00","level":"INFO","msg":"server running","port":"3000"}
+{"time":"2026-09-13T20:11:24.957271+07:00","level":"ERROR","msg":"server stopped","error":"failed to listen: listen tcp4 :3000: bind: address already in use"}
+{"time":"2026-09-13T20:16:25.097507+07:00","level":"INFO","msg":"shutting down server..."}
+{"time":"2026-09-13T20:16:25.201686+07:00","level":"INFO","msg":"server stopped gracefully"}
+{"time":"2026-09-13T20:16:27.390528+07:00","level":"INFO","msg":"server running","port":"3000"}
+{"time":"2026-09-13T20:59:12.876567+07:00","level":"INFO","msg":"shutting down server..."}
+{"time":"2026-09-13T20:59:12.980925+07:00","level":"INFO","msg":"server stopped gracefully"}
+{"time":"2026-09-13T20:59:15.400484+07:00","level":"INFO","msg":"server running","port":"3000"}

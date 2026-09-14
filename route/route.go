@@ -12,42 +12,61 @@ import (
 	"api-students/middleware"
 )
 
-func Register(
-	app *fiber.App,
-	pool *pgxpool.Pool,
-	studentService *service.StudentService,
-	achievementService *service.AchievementService, // ← TAMBAH INI
-) {
+// Dependencies - kumpulan dependency
+type Dependencies struct {
+	Pool               *pgxpool.Pool
+	JWT                *helper.JWTManager
+	StudentService     *service.StudentService
+	AchievementService *service.AchievementService
+	AuthService        *service.AuthService
+}
+
+func Register(app *fiber.App, deps Dependencies) {
 	api := app.Group("/api/v1")
 
-	// Health check
-	api.Get("/health", healthCheck(pool))
+	// ============================================================
+	// HEALTH (PUBLIK)
+	// ============================================================
+	api.Get("/health", healthCheck(deps.Pool))
 
 	// ============================================================
-	// STUDENT ROUTES
+	// AUTH (PUBLIK)
 	// ============================================================
-	students := api.Group("/students", middleware.RequireJSON)
-	students.Get("/", studentService.List)
-	students.Get("/:id", studentService.Get)
-	students.Post("/", studentService.Create)
-	students.Put("/:id", studentService.Replace)
-	students.Patch("/:id", studentService.Patch)
-	students.Delete("/:id", studentService.Delete)
+	auth := api.Group("/auth", middleware.RequireJSON)
+	auth.Post("/register", deps.AuthService.Register)
+	auth.Post("/login", middleware.LoginRateLimiter(), deps.AuthService.Login)
+	auth.Post("/refresh", deps.AuthService.Refresh)
+	auth.Post("/logout", deps.AuthService.Logout)
+	auth.Get("/me", middleware.RequireAuth(deps.JWT), deps.AuthService.Me)
 
 	// ============================================================
-	// ACHIEVEMENT ROUTES
+	// STUDENTS (WAJIB LOGIN)
 	// ============================================================
+	students := api.Group("/students",
+		middleware.RequireJSON,
+		middleware.RequireAuth(deps.JWT),
+	)
+	students.Get("/", deps.StudentService.List)
+	students.Get("/:id", deps.StudentService.Get)
+	students.Post("/", deps.StudentService.Create)
+	students.Put("/:id", deps.StudentService.Replace)
+	students.Patch("/:id", deps.StudentService.Patch)
+	students.Delete("/:id", deps.StudentService.Delete)
 
-	// Nested: prestasi milik student
-	students.Get("/:id/achievements", achievementService.GetByStudentID)
+	// ============================================================
+	// ACHIEVEMENTS (WAJIB LOGIN)
+	// ============================================================
+	students.Get("/:id/achievements", deps.AchievementService.GetByStudentID)
 
-	// Standalone
-	achievements := api.Group("/achievements", middleware.RequireJSON)
-	achievements.Get("/:id", achievementService.Get)
-	achievements.Post("/", achievementService.Create)
-	achievements.Put("/:id", achievementService.Update)
-	achievements.Patch("/:id", achievementService.Patch)
-	achievements.Delete("/:id", achievementService.Delete)
+	achievements := api.Group("/achievements",
+		middleware.RequireJSON,
+		middleware.RequireAuth(deps.JWT),
+	)
+	achievements.Get("/:id", deps.AchievementService.Get)
+	achievements.Post("/", deps.AchievementService.Create)
+	achievements.Put("/:id", deps.AchievementService.Update)
+	achievements.Patch("/:id", deps.AchievementService.Patch)
+	achievements.Delete("/:id", deps.AchievementService.Delete)
 }
 
 func healthCheck(pool *pgxpool.Pool) fiber.Handler {
