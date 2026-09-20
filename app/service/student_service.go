@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -8,7 +9,6 @@ import (
 	"api-students/app/model"
 	"api-students/app/repository"
 	"api-students/helper"
-	"errors"
 )
 
 // ============================================================================
@@ -16,11 +16,24 @@ import (
 // ============================================================================
 
 type StudentService struct {
-	repo repository.StudentRepository
+	repo  repository.StudentRepository
+	perms *helper.PermissionSet
 }
 
-func NewStudentService(repo repository.StudentRepository) *StudentService {
-	return &StudentService{repo: repo}
+func NewStudentService(repo repository.StudentRepository, perms *helper.PermissionSet) *StudentService {
+	return &StudentService{repo: repo, perms: perms}
+}
+
+// ============================================================================
+// HELPER
+// ============================================================================
+
+// ownerOf mengekstrak owner_id dari student (bisa nil).
+func ownerOf(s model.Student) int {
+	if s.OwnerID == nil {
+		return 0
+	}
+	return *s.OwnerID
 }
 
 // ============================================================================
@@ -55,6 +68,11 @@ func (s *StudentService) Get(c *fiber.Ctx) error {
 	ctx, cancel := helper.RequestContext(c)
 	defer cancel()
 
+	current, ok := helper.CurrentUser(c)
+	if !ok {
+		return helper.Fail(c, fiber.StatusUnauthorized, "belum terautentikasi")
+	}
+
 	id, ok := helper.ParamID(c)
 	if !ok {
 		return helper.Fail(c, fiber.StatusBadRequest, "invalid ID format")
@@ -66,6 +84,11 @@ func (s *StudentService) Get(c *fiber.Ctx) error {
 		return helper.Fail(c, status, msg)
 	}
 
+	// Ownership check
+	if !CanAccessStudent(current, ownerOf(student), s.perms, "student:read:any") {
+		return helper.Fail(c, fiber.StatusForbidden, "tidak berhak mengakses data student ini")
+	}
+
 	return helper.Success(c, fiber.StatusOK, "student found", student)
 }
 
@@ -74,12 +97,16 @@ func (s *StudentService) Create(c *fiber.Ctx) error {
 	ctx, cancel := helper.RequestContext(c)
 	defer cancel()
 
+	current, ok := helper.CurrentUser(c)
+	if !ok {
+		return helper.Fail(c, fiber.StatusUnauthorized, "belum terautentikasi")
+	}
+
 	var req model.CreateStudentRequest
 	if err := c.BodyParser(&req); err != nil {
 		return helper.Fail(c, fiber.StatusBadRequest, "invalid JSON body")
 	}
 
-	// Business rules
 	if errs := ValidateCreate(req); len(errs) > 0 {
 		return helper.FailValidation(c, errs)
 	}
@@ -91,7 +118,8 @@ func (s *StudentService) Create(c *fiber.Ctx) error {
 		IsActive: req.IsActive,
 	}
 
-	created, err := s.repo.Create(ctx, student)
+	// owner_id diisi dari identitas pemanggil, BUKAN dari body
+	created, err := s.repo.Create(ctx, student, current.UserID)
 	if err != nil {
 		status, msg := translateError(err)
 		return helper.Fail(c, status, msg)
@@ -105,9 +133,26 @@ func (s *StudentService) Replace(c *fiber.Ctx) error {
 	ctx, cancel := helper.RequestContext(c)
 	defer cancel()
 
+	current, ok := helper.CurrentUser(c)
+	if !ok {
+		return helper.Fail(c, fiber.StatusUnauthorized, "belum terautentikasi")
+	}
+
 	id, ok := helper.ParamID(c)
 	if !ok {
 		return helper.Fail(c, fiber.StatusBadRequest, "invalid ID format")
+	}
+
+	// Ambil data dulu untuk tahu owner-nya
+	existing, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		status, msg := translateError(err)
+		return helper.Fail(c, status, msg)
+	}
+
+	// Ownership check
+	if !CanAccessStudent(current, ownerOf(existing), s.perms, "student:update:any") {
+		return helper.Fail(c, fiber.StatusForbidden, "tidak berhak mengubah data student ini")
 	}
 
 	var req model.UpdateStudentRequest
@@ -115,7 +160,6 @@ func (s *StudentService) Replace(c *fiber.Ctx) error {
 		return helper.Fail(c, fiber.StatusBadRequest, "invalid JSON body")
 	}
 
-	// Business rules
 	if errs := ValidateReplace(req); len(errs) > 0 {
 		return helper.FailValidation(c, errs)
 	}
@@ -142,9 +186,25 @@ func (s *StudentService) Patch(c *fiber.Ctx) error {
 	ctx, cancel := helper.RequestContext(c)
 	defer cancel()
 
+	current, ok := helper.CurrentUser(c)
+	if !ok {
+		return helper.Fail(c, fiber.StatusUnauthorized, "belum terautentikasi")
+	}
+
 	id, ok := helper.ParamID(c)
 	if !ok {
 		return helper.Fail(c, fiber.StatusBadRequest, "invalid ID format")
+	}
+
+	existing, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		status, msg := translateError(err)
+		return helper.Fail(c, status, msg)
+	}
+
+	// Ownership check
+	if !CanAccessStudent(current, ownerOf(existing), s.perms, "student:update:any") {
+		return helper.Fail(c, fiber.StatusForbidden, "tidak berhak mengubah data student ini")
 	}
 
 	var req model.PatchStudentRequest
@@ -154,12 +214,6 @@ func (s *StudentService) Patch(c *fiber.Ctx) error {
 
 	if IsEmptyPatch(req) {
 		return helper.Fail(c, fiber.StatusBadRequest, "no fields to update")
-	}
-
-	existing, err := s.repo.FindByID(ctx, id)
-	if err != nil {
-		status, msg := translateError(err)
-		return helper.Fail(c, status, msg)
 	}
 
 	updated, errs := ApplyPatch(existing, req)

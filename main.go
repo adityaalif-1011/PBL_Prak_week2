@@ -50,9 +50,19 @@ func main() {
 	achievementRepo := repository.NewAchievementRepository(pool)
 	userRepo := repository.NewUserRepository(pool)
 	tokenRepo := repository.NewTokenRepository(pool)
+	roleRepo := repository.NewRoleRepository(pool) // ← TAMBAH
+
+	// Load permissions SEKALI saat startup
+	rawPermissions, err := roleRepo.LoadPermissions(context.Background())
+	if err != nil {
+		logger.Error("gagal memuat permission", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	permissions := helper.NewPermissionSet(rawPermissions)
+	logger.Info("permission dimuat", slog.Any("roles", permissions.KnownRoles()))
 
 	// Service
-	studentService := service.NewStudentService(studentRepo)
+	studentService := service.NewStudentService(studentRepo, permissions)
 	achievementService := service.NewAchievementService(achievementRepo, studentRepo)
 	authService := service.NewAuthService(
 		userRepo,
@@ -65,6 +75,7 @@ func main() {
 	app := config.NewApp(pool, route.Dependencies{
 		Pool:               pool,
 		JWT:                jwtManager,
+		Permissions:        permissions, // ← TAMBAH
 		StudentService:     studentService,
 		AchievementService: achievementService,
 		AuthService:        authService,

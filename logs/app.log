@@ -10,3 +10,18 @@
 {"time":"2026-09-13T20:59:12.876567+07:00","level":"INFO","msg":"shutting down server..."}
 {"time":"2026-09-13T20:59:12.980925+07:00","level":"INFO","msg":"server stopped gracefully"}
 {"time":"2026-09-13T20:59:15.400484+07:00","level":"INFO","msg":"server running","port":"3000"}
+{"time":"2026-09-20T21:31:51.532713+07:00","level":"INFO","msg":"permission dimuat","roles":["admin","staff","user"]}
+{"time":"2026-09-20T21:31:51.533756+07:00","level":"INFO","msg":"server running","port":"3000"}
+{"time":"2026-09-20T21:32:29.312529+07:00","level":"INFO","msg":"http_request","request_id":"5782176a-7211-4ba9-a7a1-97bf404d16ec","method":"POST","path":"/api/v1/auth/register","status":201,"duration":284174458,"ip":"127.0.0.1"}
+{"time":"2026-09-20T21:32:29.583081+07:00","level":"INFO","msg":"http_request","request_id":"5882176a-7211-4ba9-a7a1-97bf404d16ec","method":"POST","path":"/api/v1/auth/register","status":201,"duration":255774250,"ip":"127.0.0.1"}
+{"time":"2026-09-20T21:32:29.850696+07:00","level":"INFO","msg":"http_request","request_id":"5982176a-7211-4ba9-a7a1-97bf404d16ec","method":"POST","path":"/api/v1/auth/register","status":201,"duration":254576791,"ip":"127.0.0.1"}
+{"time":"2026-09-20T21:33:02.602684+07:00","level":"INFO","msg":"http_request","request_id":"5a82176a-7211-4ba9-a7a1-97bf404d16ec","method":"POST","path":"/api/v1/auth/login","status":200,"duration":289524000,"ip":"127.0.0.1"}
+{"time":"2026-09-20T21:33:02.873777+07:00","level":"INFO","msg":"http_request","request_id":"5b82176a-7211-4ba9-a7a1-97bf404d16ec","method":"POST","path":"/api/v1/auth/login","status":200,"duration":255330334,"ip":"127.0.0.1"}
+{"time":"2026-09-20T21:33:03.141067+07:00","level":"INFO","msg":"http_request","request_id":"5c82176a-7211-4ba9-a7a1-97bf404d16ec","method":"POST","path":"/api/v1/auth/login","status":200,"duration":253832667,"ip":"127.0.0.1"}
+{"time":"2026-09-20T21:34:03.20617+07:00","level":"INFO","msg":"http_request","request_id":"5d82176a-7211-4ba9-a7a1-97bf404d16ec","method":"GET","path":"/api/v1/students","status":200,"duration":9783416,"ip":"127.0.0.1","user_id":10,"role":"admin"}
+{"time":"2026-09-20T21:34:17.681809+07:00","level":"INFO","msg":"http_request","request_id":"5e82176a-7211-4ba9-a7a1-97bf404d16ec","method":"GET","path":"/api/v1/students","status":200,"duration":834833,"ip":"127.0.0.1","user_id":11,"role":"staff"}
+{"time":"2026-09-20T21:34:26.884005+07:00","level":"INFO","msg":"http_request","request_id":"5f82176a-7211-4ba9-a7a1-97bf404d16ec","method":"GET","path":"/api/v1/students","status":403,"duration":67250,"ip":"127.0.0.1","user_id":12,"role":"user"}
+{"time":"2026-09-20T21:34:39.260061+07:00","level":"INFO","msg":"http_request","request_id":"6082176a-7211-4ba9-a7a1-97bf404d16ec","method":"POST","path":"/api/v1/students","status":403,"duration":196458,"ip":"127.0.0.1","user_id":12,"role":"user"}
+{"time":"2026-09-20T21:34:51.12418+07:00","level":"INFO","msg":"http_request","request_id":"6182176a-7211-4ba9-a7a1-97bf404d16ec","method":"POST","path":"/api/v1/students","status":201,"duration":8132875,"ip":"127.0.0.1","user_id":11,"role":"staff"}
+{"time":"2026-09-20T21:34:57.927677+07:00","level":"INFO","msg":"http_request","request_id":"6282176a-7211-4ba9-a7a1-97bf404d16ec","method":"DELETE","path":"/api/v1/students/1","status":403,"duration":54959,"ip":"127.0.0.1","user_id":11,"role":"staff"}
+{"time":"2026-09-20T21:35:07.060826+07:00","level":"INFO","msg":"http_request","request_id":"6382176a-7211-4ba9-a7a1-97bf404d16ec","method":"DELETE","path":"/api/v1/students/1","status":204,"duration":8300208,"ip":"127.0.0.1","user_id":10,"role":"admin"}

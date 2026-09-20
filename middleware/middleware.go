@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log/slog"
 	"strings"
 	"time"
 
@@ -33,12 +34,22 @@ func RequestLogger() fiber.Handler {
 		err := c.Next()
 
 		requestID, _ := c.Locals("requestid").(string)
-		println("request_id:", requestID,
-			"method:", c.Method(),
-			"path:", c.Path(),
-			"status:", c.Response().StatusCode(),
-			"duration:", time.Since(start).String())
 
+		attrs := []any{
+			"request_id", requestID,
+			"method", c.Method(),
+			"path", c.Path(),
+			"status", c.Response().StatusCode(),
+			"duration", time.Since(start),
+			"ip", c.IP(),
+		}
+
+		// Identitas ikut dicatat bila sudah lewat RequireAuth
+		if user, ok := helper.CurrentUser(c); ok {
+			attrs = append(attrs, "user_id", user.UserID, "role", user.Role)
+		}
+
+		slog.Info("http_request", attrs...)
 		return err
 	}
 }

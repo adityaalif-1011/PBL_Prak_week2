@@ -16,6 +16,7 @@ import (
 type Dependencies struct {
 	Pool               *pgxpool.Pool
 	JWT                *helper.JWTManager
+	Permissions        *helper.PermissionSet // ← TAMBAH
 	StudentService     *service.StudentService
 	AchievementService *service.AchievementService
 	AuthService        *service.AuthService
@@ -40,18 +41,28 @@ func Register(app *fiber.App, deps Dependencies) {
 	auth.Get("/me", middleware.RequireAuth(deps.JWT), deps.AuthService.Me)
 
 	// ============================================================
-	// STUDENTS (WAJIB LOGIN)
+	// STUDENTS (WAJIB LOGIN + PERMISSION)
 	// ============================================================
 	students := api.Group("/students",
 		middleware.RequireJSON,
 		middleware.RequireAuth(deps.JWT),
 	)
-	students.Get("/", deps.StudentService.List)
+
+	// Hak bisa diputuskan TANPA lihat data → middleware
+	students.Get("/",
+		middleware.RequirePermission(deps.Permissions, "student:list"),
+		deps.StudentService.List)
+	students.Post("/",
+		middleware.RequirePermission(deps.Permissions, "student:create"),
+		deps.StudentService.Create)
+	students.Delete("/:id",
+		middleware.RequirePermission(deps.Permissions, "student:delete"),
+		deps.StudentService.Delete)
+
+	// Hak BUTUH lihat data → service (ownership check)
 	students.Get("/:id", deps.StudentService.Get)
-	students.Post("/", deps.StudentService.Create)
 	students.Put("/:id", deps.StudentService.Replace)
 	students.Patch("/:id", deps.StudentService.Patch)
-	students.Delete("/:id", deps.StudentService.Delete)
 
 	// ============================================================
 	// ACHIEVEMENTS (WAJIB LOGIN)
