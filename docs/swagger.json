@@ -1,0 +1,1835 @@
+{
+    "schemes": [
+        "http"
+    ],
+    "swagger": "2.0",
+    "info": {
+        "description": "API praktikum backend: students, courses, enrollments, reviews, dan notifikasi.",
+        "title": "API Students",
+        "contact": {},
+        "version": "1.0"
+    },
+    "basePath": "/api/v1",
+    "paths": {
+        "/admin/queue": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Menggabungkan statistik outbox (Postgres), jumlah notifikasi terkirim, dan info queue Asynq (Redis). Butuh permission queue:monitor.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Pantau antrian notifikasi",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/model.ResponseEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.QueueStats"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/login": {
+            "post": {
+                "description": "Mengautentikasi username \u0026 password, lalu mengembalikan access token dan refresh token.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Login dan ambil pasangan token",
+                "parameters": [
+                    {
+                        "description": "Kredensial login",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResponseEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/logout": {
+            "post": {
+                "description": "Menarik refresh token (revoke berdasarkan hash) sehingga tidak bisa dipakai lagi. Walaupun body kosong/token tidak dikenal, request tetap dianggap berhasil.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Logout",
+                "parameters": [
+                    {
+                        "description": "Refresh token yang dicabut (opsional)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.RefreshRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResponseEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mengambil data user berdasarkan access token pada header Authorization.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Profil user yang sedang login",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/model.ResponseEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.User"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/refresh": {
+            "post": {
+                "description": "Menukar refresh token yang masih berlaku dengan pasangan token baru.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Perbarui access token",
+                "parameters": [
+                    {
+                        "description": "Refresh token",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.RefreshRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResponseEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/register": {
+            "post": {
+                "description": "Mendaftarkan akun baru. Role selalu ditentukan server (user) agar tidak terjadi mass assignment.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Mendaftarkan user baru",
+                "parameters": [
+                    {
+                        "description": "Data pendaftaran",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.RegisterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/model.ResponseEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/courses": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mengambil seluruh course beserta sisa kuotanya.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "courses"
+                ],
+                "summary": "Daftar mata kuliah",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/model.ResponseEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.Course"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/courses/mine": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mengambil course yang diikuti student milik user yang login, lengkap dengan total \u0026 batas SKS.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "courses"
+                ],
+                "summary": "Mata kuliah milik saya",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/model.ResponseEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.MyCourses"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/courses/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mengambil satu course berdasarkan id.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "courses"
+                ],
+                "summary": "Detail mata kuliah",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID course",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/model.ResponseEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.Course"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/courses/{id}/quota": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mengubah kuota dengan optimistic locking: kolom version harus cocok, lalu version dinaikkan.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "courses"
+                ],
+                "summary": "Ubah kuota course",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID course",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Kuota baru + versi terakhir",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.UpdateQuotaRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/model.ResponseEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.Course"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/courses/{id}/reviews": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mengambil seluruh ulasan sebuah kelas (terbaru di atas) beserta metadata halamannya.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reviews"
+                ],
+                "summary": "Daftar review satu kelas",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID course",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/model.ResponseEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.ReviewPage"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Menambah ulasan mahasiswa untuk sebuah kelas. Kelas harus ada dan student harus terdaftar sebagai peserta; rating 1..5; tag dinormalkan (huruf kecil, tanpa duplikat).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reviews"
+                ],
+                "summary": "Tulis review kelas",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID course",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Isi review",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.CreateReviewRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/model.ResponseEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.Review"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/courses/{id}/reviews/summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mengambil agregasi review sebuah kelas: total, rata-rata rating, distribusi rating, jumlah balasan, dan jumlah helpful.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reviews"
+                ],
+                "summary": "Ringkasan review satu kelas",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID course",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/model.ResponseEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.ReviewSummary"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/enrollments": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mendaftarkan student ke sebuah course: cek duplikasi, kuota, dan batas SKS dalam SATU transaksi, sekaligus mencatat event ke outbox.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "enrollments"
+                ],
+                "summary": "Daftar mata kuliah",
+                "parameters": [
+                    {
+                        "description": "Data pendaftaran",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.CreateEnrollmentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/model.ResponseEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.Enrollment"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/enrollments/swap": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Menukar enrollment lama dengan kelas baru dalam SATU transaksi (drop + enroll), termasuk penyesuaian kuota, SKS, dan event outbox.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "enrollments"
+                ],
+                "summary": "Pindah kelas",
+                "parameters": [
+                    {
+                        "description": "Kelas lama dan kelas baru",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.SwapEnrollmentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/model.ResponseEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.Enrollment"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/enrollments/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Menghapus enrollment, mengembalikan kuota \u0026 SKS, lalu mencatat event outbox dalam transaksi yang sama.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "enrollments"
+                ],
+                "summary": "Keluar dari mata kuliah",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID enrollment",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/mine": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mengambil notifikasi milik user yang sedang login (maksimal 50 terbaru).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Notifikasi saya",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/model.ResponseEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.Notification"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/reviews/{id}/helpful": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Menambahkan (atau menghapus) student pada daftar helpful sebuah review — satu student hanya boleh menandai satu kali.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reviews"
+                ],
+                "summary": "Tandai review membantu",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID review (ObjectId MongoDB)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "student_id penanda",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.MarkHelpfulRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/model.ResponseEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.Review"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/reviews/{id}/replies": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Menambahkan balasan pada review tertentu. Dibatasi jumlah balasan per review (reply_limit).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reviews"
+                ],
+                "summary": "Balas sebuah review",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID review (ObjectId MongoDB)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Isi balasan",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.AddReplyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/model.ResponseEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.Review"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/users": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mengambil daftar user dengan cursor pagination. Mendukung content negotiation: kirim header Accept: text/csv untuk mengunduh CSV, selain itu JSON. Butuh permission user:list.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Daftar user (cursor pagination)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Jumlah data per halaman (default 10, maks 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Cursor halaman berikutnya (dari meta.next_cursor)",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Pencarian pada username/email",
+                        "name": "search",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/model.ResponseEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.User"
+                                            }
+                                        },
+                                        "meta": {
+                                            "$ref": "#/definitions/model.CursorMeta"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/helper.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "helper.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "fields": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "message": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "model.AddReplyRequest": {
+            "type": "object",
+            "required": [
+                "comment",
+                "student_id"
+            ],
+            "properties": {
+                "comment": {
+                    "type": "string",
+                    "maxLength": 1000
+                },
+                "student_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "model.Course": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "enrolled_count": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "kode": {
+                    "type": "string"
+                },
+                "kuota": {
+                    "type": "integer"
+                },
+                "nama": {
+                    "type": "string"
+                },
+                "sisa_kuota": {
+                    "type": "integer"
+                },
+                "sks": {
+                    "type": "integer"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "model.CreateEnrollmentRequest": {
+            "type": "object",
+            "required": [
+                "course_id",
+                "student_id",
+                "tahun_akademik"
+            ],
+            "properties": {
+                "course_id": {
+                    "type": "integer"
+                },
+                "student_id": {
+                    "type": "integer"
+                },
+                "tahun_akademik": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.CreateReviewRequest": {
+            "type": "object",
+            "required": [
+                "comment",
+                "course_id",
+                "rating",
+                "student_id"
+            ],
+            "properties": {
+                "comment": {
+                    "type": "string",
+                    "maxLength": 1000
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "rating": {
+                    "type": "integer",
+                    "maximum": 5,
+                    "minimum": 1
+                },
+                "student_id": {
+                    "type": "integer"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "model.CursorMeta": {
+            "type": "object",
+            "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "next_cursor": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.Enrollment": {
+            "type": "object",
+            "properties": {
+                "course_id": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "kode": {
+                    "description": "Join (opsional, diisi saat response)",
+                    "type": "string"
+                },
+                "nama": {
+                    "type": "string"
+                },
+                "sks": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "student_id": {
+                    "type": "integer"
+                },
+                "tahun_akademik": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.LoginRequest": {
+            "type": "object",
+            "required": [
+                "password",
+                "username"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.MarkHelpfulRequest": {
+            "type": "object",
+            "required": [
+                "student_id"
+            ],
+            "properties": {
+                "student_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "model.MyCourses": {
+            "type": "object",
+            "properties": {
+                "courses": {
+                    "description": "Courses daftar enrollment (khusus student milik user login).",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.Enrollment"
+                    }
+                },
+                "max_credits": {
+                    "description": "MaxCredits batas maksimum SKS (students.batas_sks).",
+                    "type": "integer"
+                },
+                "total_credits": {
+                    "description": "TotalCredits total SKS yang sedang diambil (students.total_sks).",
+                    "type": "integer"
+                }
+            }
+        },
+        "model.Notification": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "channel": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "outbox_id": {
+                    "type": "integer"
+                },
+                "sent_at": {
+                    "type": "string"
+                },
+                "subject": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "model.OutboxStats": {
+            "type": "object",
+            "properties": {
+                "published": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "unpublished": {
+                    "type": "integer"
+                }
+            }
+        },
+        "model.QueueStats": {
+            "type": "object",
+            "properties": {
+                "notifications": {
+                    "type": "integer"
+                },
+                "outbox": {
+                    "$ref": "#/definitions/model.OutboxStats"
+                },
+                "queues": {}
+            }
+        },
+        "model.RefreshRequest": {
+            "type": "object",
+            "required": [
+                "refresh_token"
+            ],
+            "properties": {
+                "refresh_token": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.RegisterRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "password",
+                "username"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.Reply": {
+            "type": "object",
+            "properties": {
+                "comment": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "student_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "model.ResponseEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "errors": {},
+                "message": {
+                    "type": "string"
+                },
+                "meta": {},
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "model.Review": {
+            "type": "object",
+            "properties": {
+                "comment": {
+                    "type": "string"
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "helpful_by": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "helpful_count": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "rating": {
+                    "type": "integer"
+                },
+                "replies": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.Reply"
+                    }
+                },
+                "student_id": {
+                    "type": "integer"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "model.ReviewPage": {
+            "type": "object",
+            "properties": {
+                "course_id": {
+                    "type": "integer"
+                },
+                "meta": {
+                    "$ref": "#/definitions/model.ReviewPageMeta"
+                },
+                "reviews": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.Review"
+                    }
+                }
+            }
+        },
+        "model.ReviewPageMeta": {
+            "type": "object",
+            "properties": {
+                "total": {
+                    "description": "Total jumlah review pada halaman ini (seluruh review course).",
+                    "type": "integer"
+                }
+            }
+        },
+        "model.ReviewSummary": {
+            "type": "object",
+            "properties": {
+                "avg_rating": {
+                    "type": "number"
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "rating_distribution": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "total_helpful": {
+                    "type": "integer"
+                },
+                "total_replies": {
+                    "type": "integer"
+                },
+                "total_reviews": {
+                    "type": "integer"
+                }
+            }
+        },
+        "model.SwapEnrollmentRequest": {
+            "type": "object",
+            "required": [
+                "new_course_id",
+                "old_course_id",
+                "student_id",
+                "tahun_akademik"
+            ],
+            "properties": {
+                "new_course_id": {
+                    "type": "integer"
+                },
+                "old_course_id": {
+                    "type": "integer"
+                },
+                "student_id": {
+                    "type": "integer"
+                },
+                "tahun_akademik": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.UpdateQuotaRequest": {
+            "type": "object",
+            "required": [
+                "kuota"
+            ],
+            "properties": {
+                "kuota": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "version": {
+                    "type": "integer",
+                    "minimum": 0
+                }
+            }
+        },
+        "model.User": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "Masukkan access token dengan format `Bearer \u003ctoken\u003e`.",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    }
+}

@@ -17,7 +17,7 @@ func RequireAuth(jwtManager *helper.JWTManager) fiber.Handler {
 		token, err := bearerToken(c)
 		if err != nil {
 			c.Set("WWW-Authenticate", `Bearer realm="api"`)
-			return helper.Fail(c, fiber.StatusUnauthorized,
+			return helper.NewError(fiber.StatusUnauthorized, "unauthorized",
 				"header Authorization tidak ada atau salah bentuk")
 		}
 
@@ -25,9 +25,9 @@ func RequireAuth(jwtManager *helper.JWTManager) fiber.Handler {
 		if err != nil {
 			c.Set("WWW-Authenticate", `Bearer realm="api"`)
 			if errors.Is(err, helper.ErrExpiredToken) {
-				return helper.Fail(c, fiber.StatusUnauthorized, "access token kedaluwarsa")
+				return helper.NewError(fiber.StatusUnauthorized, "token_expired", "access token kedaluwarsa")
 			}
-			return helper.Fail(c, fiber.StatusUnauthorized, "access token tidak valid")
+			return helper.NewError(fiber.StatusUnauthorized, "unauthorized", "access token tidak valid")
 		}
 
 		c.Locals(helper.LocalsAuthUser, authUser)
@@ -64,7 +64,7 @@ func LoginRateLimiter() fiber.Handler {
 		},
 		LimitReached: func(c *fiber.Ctx) error {
 			c.Set("Retry-After", "60")
-			return helper.Fail(c, fiber.StatusTooManyRequests,
+			return helper.NewError(fiber.StatusTooManyRequests, "rate_limited",
 				"terlalu banyak percobaan login, coba lagi dalam satu menit")
 		},
 	})

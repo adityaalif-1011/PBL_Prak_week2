@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"api-students/app/model"
 )
@@ -22,6 +23,19 @@ func ParamID(c *fiber.Ctx) (int, bool) {
 		return 0, false
 	}
 	return id, true
+}
+
+// ObjectIDParam membaca path param yang berupa MongoDB ObjectID hex.
+func ObjectIDParam(c *fiber.Ctx, name string) (bson.ObjectID, bool) {
+	raw := c.Params(name)
+	if raw == "" {
+		return bson.NilObjectID, false
+	}
+	oid, err := bson.ObjectIDFromHex(raw)
+	if err != nil {
+		return bson.NilObjectID, false
+	}
+	return oid, true
 }
 
 // Allowed sort columns (whitelist)

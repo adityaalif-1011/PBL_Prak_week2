@@ -1,75 +1,26 @@
 package service
 
 import (
-	"strings"
-
 	"api-students/app/model"
 )
 
-// ValidateCreate memeriksa request POST
-func ValidateCreate(req model.CreateStudentRequest) map[string]string {
-	errs := map[string]string{}
-
-	if strings.TrimSpace(req.NIM) == "" {
-		errs["nim"] = "NIM is required"
-	}
-	if strings.TrimSpace(req.Name) == "" {
-		errs["name"] = "name is required"
-	}
-	if req.Grade < 0 || req.Grade > 100 {
-		errs["grade"] = "grade must be between 0 and 100"
-	}
-
-	return errs
-}
-
-// ValidateReplace memeriksa request PUT (semua field wajib)
-func ValidateReplace(req model.UpdateStudentRequest) map[string]string {
-	errs := map[string]string{}
-
-	if strings.TrimSpace(req.NIM) == "" {
-		errs["nim"] = "NIM is required"
-	}
-	if strings.TrimSpace(req.Name) == "" {
-		errs["name"] = "name is required"
-	}
-	if req.Grade < 0 || req.Grade > 100 {
-		errs["grade"] = "grade must be between 0 and 100"
-	}
-
-	return errs
-}
-
-// ApplyPatch menerapkan perubahan PATCH ke data yang ada
-func ApplyPatch(current model.Student, req model.PatchStudentRequest) (model.Student, map[string]string) {
-	errs := map[string]string{}
-
+// ApplyPatch menerapkan field PATCH yang dikirim ke data yang ada.
+// Validasi sudah dilakukan lewat helper.ValidateStruct sebelum fungsi ini.
+func ApplyPatch(current model.Student, req model.PatchStudentRequest) model.Student {
 	if req.NIM != nil {
-		if strings.TrimSpace(*req.NIM) == "" {
-			errs["nim"] = "NIM cannot be empty"
-		} else {
-			current.NIM = *req.NIM
-		}
+		current.NIM = *req.NIM
 	}
 	if req.Name != nil {
-		if strings.TrimSpace(*req.Name) == "" {
-			errs["name"] = "name cannot be empty"
-		} else {
-			current.Name = *req.Name
-		}
+		current.Name = *req.Name
 	}
 	if req.Grade != nil {
-		if *req.Grade < 0 || *req.Grade > 100 {
-			errs["grade"] = "grade must be between 0 and 100"
-		} else {
-			current.Grade = *req.Grade
-		}
+		current.Grade = *req.Grade
 	}
 	if req.IsActive != nil {
 		current.IsActive = *req.IsActive
 	}
 
-	return current, errs
+	return current
 }
 
 // IsEmptyPatch cek apakah PATCH kosong

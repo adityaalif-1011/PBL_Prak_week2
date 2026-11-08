@@ -4,22 +4,22 @@ import "time"
 
 // RegisterRequest - request untuk daftar
 type RegisterRequest struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Username string `json:"username" validate:"required,nospace,username"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required,strongpassword"`
 	// TIDAK ADA field Role di sini!
 	// Kalau ada, siapa pun bisa daftar sebagai admin (mass assignment)
 }
 
 // LoginRequest - request untuk login
 type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username string `json:"username" validate:"required"`
+	Password string `json:"password" validate:"required"`
 }
 
 // RefreshRequest - request untuk refresh token
 type RefreshRequest struct {
-	RefreshToken string `json:"refresh_token"`
+	RefreshToken string `json:"refresh_token" validate:"required"`
 }
 
 // TokenPair - pasangan access token dan refresh token

@@ -11,11 +11,11 @@ func RequirePermission(perms *helper.PermissionSet, permission string) fiber.Han
 	return func(c *fiber.Ctx) error {
 		user, ok := helper.CurrentUser(c)
 		if !ok {
-			return helper.Fail(c, fiber.StatusUnauthorized, "belum terautentikasi")
+			return helper.NewError(fiber.StatusUnauthorized, "unauthorized", "belum terautentikasi")
 		}
 
 		if !perms.Can(user.Role, permission) {
-			return helper.Fail(c, fiber.StatusForbidden,
+			return helper.NewError(fiber.StatusForbidden, "forbidden",
 				"role "+user.Role+" tidak memiliki hak "+permission)
 		}
 

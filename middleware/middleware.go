@@ -35,11 +35,16 @@ func RequestLogger() fiber.Handler {
 
 		requestID, _ := c.Locals("requestid").(string)
 
+		status := c.Response().StatusCode()
+		if err != nil && status == fiber.StatusOK {
+			status = helper.StatusOf(err)
+		}
+
 		attrs := []any{
 			"request_id", requestID,
 			"method", c.Method(),
 			"path", c.Path(),
-			"status", c.Response().StatusCode(),
+			"status", status,
 			"duration", time.Since(start),
 			"ip", c.IP(),
 		}
@@ -58,7 +63,7 @@ func RequireJSON(c *fiber.Ctx) error {
 	if methodsWithBody[c.Method()] {
 		ct := c.Get("Content-Type")
 		if !strings.HasPrefix(ct, fiber.MIMEApplicationJSON) {
-			return helper.Fail(c, fiber.StatusUnsupportedMediaType, "Content-Type must be application/json")
+			return helper.NewError(fiber.StatusUnsupportedMediaType, "unsupported_media_type", "Content-Type must be application/json")
 		}
 	}
 	return c.Next()

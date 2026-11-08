@@ -1,0 +1,110 @@
+# ============================================================
+# Docker Compose: API + Worker + PostgreSQL + MongoDB + Redis
+# Variabel diambil dari file .env di folder project.
+# ============================================================
+
+# Konfigurasi bersama untuk service api & worker.
+x-app: &app
+  image: api-students:latest
+  build: .
+  restart: unless-stopped
+  environment:
+    APP_NAME: API Students
+    APP_PORT: "3000"
+    # PostgreSQL (host = nama service postgres)
+    DB_HOST: postgres
+    DB_PORT: "5432"
+    DB_USER: ${DB_USER:-postgres}
+    DB_PASSWORD: ${DB_PASSWORD:-postgres}
+    DB_NAME: ${DB_NAME:-praktikum_backend}
+    DB_SSLMODE: ${DB_SSLMODE:-disable}
+    DB_MAX_CONNS: ${DB_MAX_CONNS:-10}
+    # Auth
+    JWT_SECRET: ${JWT_SECRET:?JWT_SECRET wajib diisi di file .env}
+    JWT_ISSUER: ${JWT_ISSUER:-praktikum-backend}
+    JWT_ACCESS_TTL_MINUTES: ${JWT_ACCESS_TTL_MINUTES:-15}
+    JWT_REFRESH_TTL_DAYS: ${JWT_REFRESH_TTL_DAYS:-7}
+    # MongoDB (host = nama service mongo)
+    MONGO_URI: mongodb://mongo:27017
+    MONGO_DB: ${MONGO_DB:-api_students}
+    # Redis (host = nama service redis)
+    REDIS_ADDR: redis:6379
+    REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    REDIS_DB: ${REDIS_DB:-0}
+    # Worker & relay
+    WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-10}
+    RELAY_INTERVAL_MS: ${RELAY_INTERVAL_MS:-1000}
+    RELAY_BATCH: ${RELAY_BATCH:-50}
+    MAILER_DELAY_MS: ${MAILER_DELAY_MS:-150}
+    MAILER_FAIL_EVERY: ${MAILER_FAIL_EVERY:-5}
+    # Swagger UI
+    SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+  depends_on:
+    postgres:
+      condition: service_healthy
+    mongo:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  api:
+    <<: *app
+    ports:
+      - "8080:3000"
+    command: ["-role=api"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3000/api/v1/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    <<: *app
+    command: ["-role=worker"]
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-praktikum_backend}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Migration dijalankan otomatis sekali saat database pertama dibuat.
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongo:
+    image: mongo:9.0
+    restart: unless-stopped
+    volumes:
+      - mongodata:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
+  mongodata:
+  redisdata:
